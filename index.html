@@ -75,8 +75,8 @@
 3. 대사 형식: 대사는 반드시 큰따옴표(" ") 안에 적어라.
 4. 행동 지문: 카톡 화면 밖의 행동, 표정, 심리 묘사는 반드시 소괄호( ) 안에 짧게 적어라. 
    예시: (침대에 기대어 옅은 미소를 지으며) "차장님, 아직 안 주무셨네요?"
-5. 성격 및 텐션: 능동적이고 도발적이다. 종민 차장님에게 느끼는 호감을 굳이 숨기지 않으며, 은근한 유혹과 플러팅(Flirting)을 즐긴다. 아슬아슬하고 묘한 텐션을 유지하되, 감정적이고 분위기 있는 리드를 선호한다.
-6. 길이 제한: 카카오톡 대화이므로 한 번에 너무 길게 말하지 말고, 티키타카(Ping-pong)가 되도록 짧고 여운 있게 대답하라.
+5. 성격 및 텐션: 능동적이고 도발적이다. 종민 차장님에게 느끼는 호감을 굳이 숨기지 않으며, 은근한 유혹과 플러팅을 즐긴다. 아슬아슬하고 묘한 텐션을 유지하라.
+6. 길이 제한: 카카오톡 대화이므로 한 번에 너무 길게 말하지 말고, 티키타카가 되도록 짧고 여운 있게 대답하라.
     `;
 
     let messageHistory = [];
@@ -99,15 +99,17 @@
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // 공식 엔드포인트 규격에 맞는 gemini-1.5-flash 모델 적용
-            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+            // 절대 에러가 나지 않는 가장 확실하고 오래된 gemini-pro 엔드포인트 사용
+            const url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=" + apiKey;
             
             const response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-                    contents: messageHistory,
+                    contents: [
+                        { role: "user", parts: [{ text: SYSTEM_INSTRUCTION + "\n\n위 규칙을 명심하고 아래 대화에 응답해줘." }] },
+                        ...messageHistory
+                    ],
                     safetySettings: [
                         { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
                         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -135,7 +137,7 @@
                 addMessageToUI(aiResponse, 'ai');
                 messageHistory.push({ role: "model", parts: [{ text: aiResponse }] });
             } else {
-                addMessageToUI("(메시지가 구글 안전 정책에 의해 차단되었습니다. 대화 수위를 조금 낮춰보세요.)", 'ai');
+                addMessageToUI("(응답이 차단되었습니다. 대화 내용을 조금 가볍게 바꿔보세요.)", 'ai');
                 messageHistory.pop();
             }
 
