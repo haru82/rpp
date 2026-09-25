@@ -72,7 +72,6 @@
 </div>
 
 <script>
-    // 개선 1: sessionStorage 사용 및 창 종료 시 키 삭제 (보안 완화)
     window.onload = function() {
         const savedKey = sessionStorage.getItem('temp_gemini_key');
         if (savedKey) {
@@ -105,8 +104,14 @@
 4. 출력 완성도: 답변을 중간에 끊거나 미완성 상태로 두지 말고, 반드시 문장과 의미를 온전히 끝맺어 출력하라.
     `;
 
-    let chatHistory = [];
-    let isWaitingForResponse = false; // 중복 전송 방지 플래그
+    // 수정 3: AI가 자신의 첫 메시지를 기억하도록 초기 문맥(History) 세팅
+    let chatHistory = [
+        {
+            role: "model",
+            parts: [{ text: `(침대에 기대어 스마트폰을 바라보다가 옅은 미소를 지으며) "차장님, 아직 안 주무셨네요? 마침 저도 혼자 심심했는데 잘 됐네."` }]
+        }
+    ];
+    let isWaitingForResponse = false; 
 
     async function sendMessage() {
         if (isWaitingForResponse) return;
@@ -129,7 +134,6 @@
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // 개선 3: API 통신 로직 분리 및 재시도/정합성 관리
             const aiResponseText = await fetchAIResponse(apiKey, chatHistory);
             
             document.getElementById(loadingId).remove();
@@ -139,15 +143,15 @@
         } catch (error) {
             document.getElementById(loadingId).remove();
             addMessageToUI("오류 발생: " + error.message, 'ai');
-            chatHistory.pop(); // 에러 시 한 번만 히스토리 롤백
+            chatHistory.pop(); 
         } finally {
             isWaitingForResponse = false;
         }
     }
 
     async function fetchAIResponse(apiKey, history) {
-        // 개선 4: 정확한 최신 권장 모델명 사용 (gemini-1.5-flash)
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // 수정 2: 'not found' 오류 방지를 위해 -latest 태그가 붙은 모델명으로 변경
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
         
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
@@ -155,7 +159,8 @@
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+                        // 수정 1: system_instruction (X) -> systemInstruction (O) (카멜표기법 사용)
+                        systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
                         contents: history,
                         safetySettings: [
                             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
@@ -194,7 +199,6 @@
         }
     }
 
-    // 개선 2: XSS 방지를 위한 안전한 텍스트 렌더링 함수
     function createSafeTextNodes(text, container) {
         const lines = text.split('\n');
         lines.forEach((line, index) => {
@@ -214,7 +218,6 @@
         const msgId = 'msg-' + Date.now();
         rowDiv.id = msgId;
 
-        // 컨테이너 요소들 생성
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
 
@@ -222,7 +225,6 @@
         bubbleDiv.className = 'bubble';
         if (isLoading) bubbleDiv.style.color = '#888';
 
-        // 텍스트를 안전하게 삽입
         createSafeTextNodes(text, bubbleDiv);
 
         if (senderType === 'ai') {
