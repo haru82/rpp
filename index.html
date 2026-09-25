@@ -40,7 +40,7 @@
 
 <div class="mobile-container">
     <div class="header">
-        <span class="title">HJ 과장님 (Gemini 연동 완료)</span>
+        <span class="title">HJ 과장님 (Gemini 3.8 연동)</span>
     </div>
 
     <div id="chat-box">
@@ -63,7 +63,7 @@
 </div>
 
 <script>
-    // 🔑 아래에 본인의 구글 Gemini API 키를 직접 넣어두었습니다. (외부 노출 걱정 없는 본인만의 깃허브 저장소입니다)
+    // 🔑 본인의 구글 Gemini API 키를 큰따옴표 사이에 넣어주세요.
     const GEMINI_API_KEY = "여기에_본인의_제미나이_키를_넣으세요"; 
 
     const SYSTEM_INSTRUCTION = `
@@ -94,8 +94,8 @@
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // 구글 공식 Gemini 1.5 Flash API 호출
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+            // 최신 안정형 모델: gemini-3.8-flash 적용
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`;
 
             const response = await fetch(url, {
                 method: "POST",
