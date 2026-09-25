@@ -99,8 +99,8 @@
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // 오타 및 문법 오류 완벽 수정: gemini-1.5-flash 모델 적용
-            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+            // 모델명을 gemini-1.5-flash-latest 로 수정하여 API 호출 오류 해결
+            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + apiKey;
             
             const response = await fetch(url, {
                 method: "POST",
