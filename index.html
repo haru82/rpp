@@ -45,7 +45,7 @@
 <div class="mobile-container">
     <div id="api-key-area">
         Gemini Key: <input type="password" id="api-key" placeholder="AIza로 시작하는 키">
-        <button onclick="saveKey()">저장</button>
+        <button onclick="saveKey()">임시 저장</button>
     </div>
     
     <div class="header">
@@ -53,7 +53,7 @@
     </div>
 
     <div id="chat-box">
-        <div class="system-msg" id="status-msg">상단에 제미나이 API 키를 입력하고 [저장]을 눌러주세요.</div>
+        <div class="system-msg" id="status-msg">상단에 제미나이 API 키를 입력하고 [임시 저장]을 눌러주세요.</div>
         <div class="message-row ai">
             <div class="profile-pic"></div>
             <div class="message-content">
@@ -72,20 +72,25 @@
 </div>
 
 <script>
+    // 개선 1: sessionStorage 사용 및 창 종료 시 키 삭제 (보안 완화)
     window.onload = function() {
-        const savedKey = localStorage.getItem('my_gemini_key');
+        const savedKey = sessionStorage.getItem('temp_gemini_key');
         if (savedKey) {
             document.getElementById('api-key').value = savedKey;
             document.getElementById('status-msg').innerText = "연결 준비 완료. 대화를 시작하세요.";
         }
     };
 
+    window.addEventListener('beforeunload', function() {
+        sessionStorage.removeItem('temp_gemini_key');
+    });
+
     function saveKey() {
         const key = document.getElementById('api-key').value.trim();
         if (key) {
-            localStorage.setItem('my_gemini_key', key);
-            document.getElementById('status-msg').innerText = "제미나이 키 저장 완료!";
-            alert('키가 브라우저에 안전하게 저장되었습니다!');
+            sessionStorage.setItem('temp_gemini_key', key);
+            document.getElementById('status-msg').innerText = "제미나이 키 임시 저장 완료! (창 닫으면 삭제됨)";
+            alert('키가 세션에 저장되었습니다. 창을 닫으면 사라집니다.');
         } else {
             alert('키를 입력해주세요.');
         }
@@ -101,38 +106,57 @@
     `;
 
     let chatHistory = [];
+    let isWaitingForResponse = false; // 중복 전송 방지 플래그
 
     async function sendMessage() {
-        const apiKey = document.getElementById('api-key').value.trim() || localStorage.getItem('my_gemini_key');
+        if (isWaitingForResponse) return;
+
+        const apiKey = document.getElementById('api-key').value.trim() || sessionStorage.getItem('temp_gemini_key');
         const inputField = document.getElementById('user-input');
         const userText = inputField.value.trim();
 
         if (!userText) return;
         if (!apiKey) {
-            alert("상단에 Gemini API 키를 입력하고 [저장]을 눌러주세요!");
+            alert("상단에 Gemini API 키를 입력하고 [임시 저장]을 눌러주세요!");
             return;
         }
 
+        isWaitingForResponse = true;
         addMessageToUI(userText, 'user');
         inputField.value = '';
 
         chatHistory.push({ role: "user", parts: [{ text: userText }] });
-
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
-        let success = false;
-        let aiResponse = "";
+        try {
+            // 개선 3: API 통신 로직 분리 및 재시도/정합성 관리
+            const aiResponseText = await fetchAIResponse(apiKey, chatHistory);
+            
+            document.getElementById(loadingId).remove();
+            addMessageToUI(aiResponseText, 'ai');
+            chatHistory.push({ role: "model", parts: [{ text: aiResponseText }] });
+            
+        } catch (error) {
+            document.getElementById(loadingId).remove();
+            addMessageToUI("오류 발생: " + error.message, 'ai');
+            chatHistory.pop(); // 에러 시 한 번만 히스토리 롤백
+        } finally {
+            isWaitingForResponse = false;
+        }
+    }
 
+    async function fetchAIResponse(apiKey, history) {
+        // 개선 4: 정확한 최신 권장 모델명 사용 (gemini-1.5-flash)
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
-
                 const response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-                        contents: chatHistory,
+                        contents: history,
                         safetySettings: [
                             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
                             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -141,49 +165,46 @@
                         ],
                         generationConfig: {
                             temperature: 0.85,
-                            maxOutputTokens: 800 // 토큰 제한을 800으로 대폭 늘려 중간에 끊기는 현상 방지
+                            maxOutputTokens: 800 
                         }
                     })
                 });
 
                 const data = await response.json();
 
+                if (response.ok && data.candidates && data.candidates[0].content) {
+                    return data.candidates[0].content.parts[0].text;
+                }
+
                 if (data.error) {
                     if (data.error.code === 503 && attempt < 3) {
                         await new Promise(r => setTimeout(r, 1000));
                         continue;
                     }
-                    document.getElementById(loadingId).remove();
-                    addMessageToUI("API 오류: " + data.error.message, 'ai');
-                    chatHistory.pop();
-                    return;
+                    throw new Error(data.error.message);
                 }
+                throw new Error("올바르지 않은 API 응답 형식");
 
-                if (data.candidates && data.candidates[0].content) {
-                    aiResponse = data.candidates[0].content.parts[0].text;
-                    success = true;
-                    break;
-                }
             } catch (err) {
                 if (attempt === 3) {
-                    document.getElementById(loadingId).remove();
-                    addMessageToUI("통신 오류가 발생했습니다.", 'ai');
-                    chatHistory.pop();
-                    return;
+                    throw new Error(err.message || "통신 오류가 발생했습니다.");
                 }
                 await new Promise(r => setTimeout(r, 1000));
             }
         }
+    }
 
-        document.getElementById(loadingId).remove();
-
-        if (success) {
-            addMessageToUI(aiResponse, 'ai');
-            chatHistory.push({ role: "model", parts: [{ text: aiResponse }] });
-        } else {
-            addMessageToUI("서버가 혼잡하여 응답을 받지 못했습니다. 잠시 후 다시 전송해주세요.", 'ai');
-            chatHistory.pop();
-        }
+    // 개선 2: XSS 방지를 위한 안전한 텍스트 렌더링 함수
+    function createSafeTextNodes(text, container) {
+        const lines = text.split('\n');
+        lines.forEach((line, index) => {
+            if (line) {
+                container.appendChild(document.createTextNode(line));
+            }
+            if (index < lines.length - 1) {
+                container.appendChild(document.createElement('br'));
+            }
+        });
     }
 
     function addMessageToUI(text, senderType, isLoading = false) {
@@ -192,27 +213,36 @@
         rowDiv.className = 'message-row ' + senderType;
         const msgId = 'msg-' + Date.now();
         rowDiv.id = msgId;
-        
-        let innerHTML = '';
-        const formattedText = text.replace(/\n/g, '<br>');
+
+        // 컨테이너 요소들 생성
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'bubble';
+        if (isLoading) bubbleDiv.style.color = '#888';
+
+        // 텍스트를 안전하게 삽입
+        createSafeTextNodes(text, bubbleDiv);
 
         if (senderType === 'ai') {
-            innerHTML = `
-                <div class="profile-pic"></div>
-                <div class="message-content">
-                    <div class="sender-name">HJ 과장님</div>
-                    <div class="bubble" ${isLoading ? 'style="color:#888;"' : ''}>${formattedText}</div>
-                </div>
-            `;
+            const profilePic = document.createElement('div');
+            profilePic.className = 'profile-pic';
+            
+            const senderName = document.createElement('div');
+            senderName.className = 'sender-name';
+            senderName.textContent = 'HJ 과장님';
+
+            contentDiv.appendChild(senderName);
+            contentDiv.appendChild(bubbleDiv);
+
+            rowDiv.appendChild(profilePic);
+            rowDiv.appendChild(contentDiv);
         } else {
-            innerHTML = `
-                <div class="message-content">
-                    <div class="bubble">${formattedText}</div>
-                </div>
-            `;
+            contentDiv.appendChild(bubbleDiv);
+            rowDiv.appendChild(contentDiv);
         }
         
-        rowDiv.innerHTML = innerHTML;
         chatBox.appendChild(rowDiv);
         
         setTimeout(() => {
