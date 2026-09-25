@@ -110,16 +110,9 @@
                     "X-Title": "KatalkRP"
                 },
                 body: JSON.stringify({
-                    // 단일 모델이 아닌 배열로 요청을 보냅니다 (OpenRouter 공식 지원 기능).
-                    // 이렇게 하면 단 한 번의 요청만으로 서버 단에서 순서대로 작동하는 모델을 찾아줍니다.
-                    // 클라이언트(브라우저)에서 밴(차단)을 당할 일이 없습니다.
-                    models: [
-                        "meta-llama/llama-3.3-70b-instruct:free",
-                        "qwen/qwen-2.5-72b-instruct:free",
-                        "google/gemini-2.0-pro-exp-02-05:free",
-                        "nvidia/llama-3.1-nemotron-70b-instruct:free",
-                        "mistralai/mistral-nemo-free"
-                    ],
+                    // 결제 없이도 OpenRouter 서버가 알아서 현재 시점에 가장 널널하고 
+                    // 똑똑한 무료/할인 모델을 자동 배정해주는 마법의 라우팅 코드입니다.
+                    model: "openrouter/auto", 
                     messages: messageHistory,
                     temperature: 0.8,
                     max_tokens: 300
@@ -130,9 +123,7 @@
             document.getElementById(loadingId).remove();
 
             if (data.error) {
-                let errorMsg = data.error.message;
-                // 에러 원인이 '무료 일일 한도 초과' 등 API 키 자체의 문제일 수 있음
-                addMessageToUI("API 오류: " + errorMsg + "<br>(※ 일일 무료 한도를 초과했거나 일시적인 서버 오류일 수 있습니다. 잠시 후 시도해주세요.)", 'ai');
+                addMessageToUI("API 오류: " + data.error.message + "<br>잠시 후 다시 시도해주세요.", 'ai');
                 messageHistory.pop(); 
                 return;
             }
