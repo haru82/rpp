@@ -8,12 +8,16 @@
         body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background-color: #e0e0e0; margin: 0; display: flex; justify-content: center; height: 100vh; }
         .mobile-container { width: 100%; max-width: 450px; height: 100vh; background-color: #b2c7d9; display: flex; flex-direction: column; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
         
+        #api-key-area { background: #2c3e50; padding: 8px; text-align: center; font-size: 11px; color: #fff; z-index: 10; display: flex; justify-content: center; align-items: center; gap: 5px; }
+        #api-key-area input { padding: 4px; width: 180px; border-radius: 4px; border: none; font-size: 11px; }
+        #api-key-area button { padding: 3px 8px; background: #f1c40f; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px; }
+
         .header { background-color: #b2c7d9; padding: 15px; font-weight: bold; text-align: center; font-size: 16px; border-bottom: 1px solid rgba(0,0,0,0.05); color: #333; display: flex; justify-content: space-between; align-items: center; }
         .header .back-btn { font-size: 20px; cursor: pointer; color: #333; }
         .header .title { flex: 1; text-align: center; }
 
         #chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        .system-msg { background-color: rgba(0,0,0,0.1); color: #fff; font-size: 12px; padding: 5px 15px; border-radius: 15px; align-self: center; margin-bottom: 10px; }
+        .system-msg { background-color: rgba(0,0,0,0.1); color: #fff; font-size: 12px; padding: 5px 15px; border-radius: 15px; align-self: center; margin-bottom: 10px; text-align: center; }
 
         .message-row { display: flex; width: 100%; align-items: flex-start; }
         .message-row.ai { flex-direction: row; }
@@ -40,6 +44,11 @@
 <body>
 
 <div class="mobile-container">
+    <div id="api-key-area">
+        API Key: <input type="password" id="api-key" placeholder="sk-or-v1-...">
+        <button onclick="saveKey()">저장</button>
+    </div>
+    
     <div class="header">
         <span class="back-btn">⟨</span>
         <span class="title">HJ 과장님</span>
@@ -47,7 +56,7 @@
     </div>
 
     <div id="chat-box">
-        <div class="system-msg">대화가 연결되었습니다.</div>
+        <div class="system-msg">상단에 OpenRouter API 키를 입력하고 [저장]을 눌러주세요.</div>
         <div class="message-row ai">
             <div class="profile-pic"></div>
             <div class="message-content">
@@ -66,6 +75,24 @@
 </div>
 
 <script>
+    // 페이지 로드 시 저장된 API 키 불러오기
+    window.onload = function() {
+        const savedKey = localStorage.getItem('openrouter_key');
+        if (savedKey) {
+            document.getElementById('api-key').value = savedKey;
+        }
+    };
+
+    function saveKey() {
+        const key = document.getElementById('api-key').value.trim();
+        if (key) {
+            localStorage.setItem('openrouter_key', key);
+            alert('API 키가 브라우저에 저장되었습니다!');
+        } else {
+            alert('키를 입력해주세요.');
+        }
+    }
+
     const CHARACTER_PERSONA = `
 당신은 "HJ"라는 34세 기혼 여성, IT기업 기획팀 과장이다. 
 상대방은 같은 회사의 '김종민 차장'이다. 
@@ -85,10 +112,15 @@
     ];
 
     async function sendMessage() {
+        const apiKey = document.getElementById('api-key').value.trim() || localStorage.getItem('openrouter_key');
         const inputField = document.getElementById('user-input');
         const userText = inputField.value.trim();
 
         if (!userText) return;
+        if (!apiKey) {
+            alert("상단에 OpenRouter API 키를 입력하고 [저장]을 눌러주세요!");
+            return;
+        }
 
         addMessageToUI(userText, 'user');
         inputField.value = '';
@@ -97,11 +129,11 @@
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // 검증된 단일 오픈소스 모델 엔드포인트 사용 (에러 없음)
+            // 가장 안정적이고 호환성이 높은 오픈라우터 무료 모델 지정
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: {
-                    "Authorization": "Bearer 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", 
+                    "Authorization": "Bearer " + apiKey,
                     "Content-Type": "application/json",
                     "HTTP-Referer": "https://github.com",
                     "X-Title": "KatalkRP"
@@ -134,7 +166,7 @@
 
         } catch (error) {
             document.getElementById(loadingId).remove();
-            addMessageToUI("통신 오류가 발생했습니다.", 'ai');
+            addMessageToUI("통신 오류가 네트워크 상태를 확인해주세요.", 'ai');
             messageHistory.pop();
         }
     }
