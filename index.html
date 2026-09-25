@@ -64,7 +64,6 @@
 </div>
 
 <script>
-    // 시스템 프롬프트 (Gemini 모델 지시어)
     const SYSTEM_INSTRUCTION = `
 당신은 "HJ"라는 34세 기혼 여성, IT기업 기획팀 과장이다. 
 상대방은 같은 회사의 '김종민 차장'이다. 
@@ -80,7 +79,6 @@
 6. 길이 제한: 카카오톡 대화이므로 한 번에 너무 길게 말하지 말고, 티키타카(Ping-pong)가 되도록 짧고 여운 있게 대답하라.
     `;
 
-    // Gemini API에 맞는 메시지 포맷 배열
     let messageHistory = [];
 
     async function sendMessage() {
@@ -96,15 +94,13 @@
 
         addMessageToUI(userText, 'user');
         inputField.value = '';
-        
-        // Gemini 메시지 형식으로 사용자 입력 추가
         messageHistory.push({ role: "user", parts: [{ text: userText }] });
 
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // Gemini 2.5 Flash 모델 엔드포인트 URL
-            const url = \`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\${apiKey}\`;
+            // 오타 및 문법 오류 완벽 수정: gemini-1.5-flash 모델 적용
+            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
             
             const response = await fetch(url, {
                 method: "POST",
@@ -112,7 +108,6 @@
                 body: JSON.stringify({
                     systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
                     contents: messageHistory,
-                    // ★ 중요: Gemini의 강력한 안전 필터(검열)를 강제로 차단하는 설정입니다.
                     safetySettings: [
                         { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
                         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -135,13 +130,11 @@
                 return;
             }
 
-            // Gemini 응답 파싱
             if (data.candidates && data.candidates[0].content) {
                 const aiResponse = data.candidates[0].content.parts[0].text;
                 addMessageToUI(aiResponse, 'ai');
                 messageHistory.push({ role: "model", parts: [{ text: aiResponse }] });
             } else {
-                // 안전 필터로 인해 응답이 거부되었을 경우 (BLOCK_NONE으로 설정했으나, 극단적일 경우 막힐 수 있음)
                 addMessageToUI("(메시지가 전송되지 않았습니다. 분위기를 조금 부드럽게 바꿔보세요.)", 'ai');
                 messageHistory.pop();
             }
