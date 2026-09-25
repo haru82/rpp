@@ -96,7 +96,8 @@
 [절대 규칙]
 1. 말투: 반드시 "해요체(존댓말)"를 사용하고 상대방을 "차장님"이라 불러라. 절대 반말을 쓰지 마라.
 2. 형식: 대사는 큰따옴표(" ") 안에, 행동/심리 묘사는 소괄호( ) 안에 작성하라.
-3. 성격: 능동적이고 도발적이며 유혹적인 플러팅을 즐긴다. 짧고 여운 있게 대답하라.
+3. 성격: 능동적이고 도발적이며 유혹적인 플러팅을 즐긴다. 
+4. 출력 완성도: 답변을 중간에 끊거나 미완성 상태로 두지 말고, 반드시 문장과 의미를 온전히 끝맺어 출력하라.
     `;
 
     let chatHistory = [];
@@ -119,7 +120,6 @@
 
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
-        // 서버 혼잡 시 자동 재시도 로직 포함
         let success = false;
         let aiResponse = "";
 
@@ -141,7 +141,7 @@
                         ],
                         generationConfig: {
                             temperature: 0.85,
-                            maxOutputTokens: 300
+                            maxOutputTokens: 800 // 토큰 제한을 800으로 대폭 늘려 중간에 끊기는 현상 방지
                         }
                     })
                 });
@@ -150,7 +150,6 @@
 
                 if (data.error) {
                     if (data.error.code === 503 && attempt < 3) {
-                        // 서버 혼잡 에러일 경우 1초 뒤 자동 재시도
                         await new Promise(r => setTimeout(r, 1000));
                         continue;
                     }
