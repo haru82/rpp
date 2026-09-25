@@ -64,8 +64,6 @@
 </div>
 
 <script>
-    // 제미나이의 안전 필터에 걸리지 않도록 직접적인 19금 단어를 빼고 
-    // '은근한 유혹과 플러팅'으로 프롬프트를 전면 수정했습니다.
     const SYSTEM_INSTRUCTION = `
 당신은 "HJ"라는 34세 기혼 여성, IT기업 기획팀 과장이다. 
 상대방은 같은 회사의 '김종민 차장'이다. 
@@ -81,7 +79,6 @@
 6. 길이 제한: 카카오톡 대화이므로 한 번에 너무 길게 말하지 말고, 티키타카(Ping-pong)가 되도록 짧고 여운 있게 대답하라.
     `;
 
-    // 제미나이 API 전용 메시지 배열
     let messageHistory = [];
 
     async function sendMessage() {
@@ -102,8 +99,8 @@
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
         try {
-            // 구글 Gemini 1.5 Flash 모델 엔드포인트
-            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+            // ★ 여기가 문제의 원인이었습니다! 확실하게 gemini-1.5-flash-latest 로 수정완료! ★
+            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + apiKey;
             
             const response = await fetch(url, {
                 method: "POST",
@@ -111,7 +108,6 @@
                 body: JSON.stringify({
                     systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
                     contents: messageHistory,
-                    // 제미나이의 안전 필터를 최대한 해제해두어 아슬아슬한 농담이 차단되지 않게 합니다.
                     safetySettings: [
                         { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
                         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -128,20 +124,17 @@
             const data = await response.json();
             document.getElementById(loadingId).remove();
 
-            // 에러 발생 시 처리
             if (data.error) {
                 addMessageToUI("API 오류: " + data.error.message, 'ai');
                 messageHistory.pop(); 
                 return;
             }
 
-            // 제미나이가 정상 응답했을 경우
             if (data.candidates && data.candidates[0].content) {
                 const aiResponse = data.candidates[0].content.parts[0].text;
                 addMessageToUI(aiResponse, 'ai');
                 messageHistory.push({ role: "model", parts: [{ text: aiResponse }] });
             } else {
-                // 안전 필터로 인해 아예 블록 당한 경우
                 addMessageToUI("(메시지가 구글 안전 정책에 의해 차단되었습니다. 대화 수위를 조금 낮춰보세요.)", 'ai');
                 messageHistory.pop();
             }
@@ -182,7 +175,6 @@
         rowDiv.innerHTML = innerHTML;
         chatBox.appendChild(rowDiv);
         
-        // 스크롤 맨 아래로 이동
         setTimeout(() => {
             chatBox.scrollTop = chatBox.scrollHeight;
         }, 50);
