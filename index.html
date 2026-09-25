@@ -83,16 +83,6 @@
         { role: "system", content: CHARACTER_PERSONA }
     ];
 
-    // OpenRouter에서 현재 가장 똑똑하고 응답률이 높은 무료 모델 6개 리스트
-    const fallbackModels = [
-        "qwen/qwen-2.5-72b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "nvidia/llama-3.1-nemotron-70b-instruct:free",
-        "meta-llama/llama-3.1-8b-instruct:free",
-        "mistralai/mistral-nemo-free",
-        "undi95/toppy-m-7b:free"
-    ];
-
     async function sendMessage() {
         const apiKey = document.getElementById('api-key').value.trim();
         const inputField = document.getElementById('user-input');
@@ -110,54 +100,51 @@
 
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
-        let success = false;
-        let aiResponse = "";
+        try {
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + apiKey,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com",
+                    "X-Title": "KatalkRP"
+                },
+                body: JSON.stringify({
+                    // 단일 모델이 아닌 배열로 요청을 보냅니다 (OpenRouter 공식 지원 기능).
+                    // 이렇게 하면 단 한 번의 요청만으로 서버 단에서 순서대로 작동하는 모델을 찾아줍니다.
+                    // 클라이언트(브라우저)에서 밴(차단)을 당할 일이 없습니다.
+                    models: [
+                        "meta-llama/llama-3.3-70b-instruct:free",
+                        "qwen/qwen-2.5-72b-instruct:free",
+                        "google/gemini-2.0-pro-exp-02-05:free",
+                        "nvidia/llama-3.1-nemotron-70b-instruct:free",
+                        "mistralai/mistral-nemo-free"
+                    ],
+                    messages: messageHistory,
+                    temperature: 0.8,
+                    max_tokens: 300
+                })
+            });
 
-        // 모델 1번부터 6번까지 순서대로 찔러봅니다. (안 되면 0.1초 만에 다음 모델로 넘어감)
-        for (let i = 0; i < fallbackModels.length; i++) {
-            try {
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": "Bearer " + apiKey,
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://github.com",
-                        "X-Title": "KatalkRP"
-                    },
-                    body: JSON.stringify({
-                        model: fallbackModels[i],
-                        messages: messageHistory,
-                        temperature: 0.8,
-                        max_tokens: 300
-                    })
-                });
+            const data = await response.json();
+            document.getElementById(loadingId).remove();
 
-                const data = await response.json();
-
-                // 에러가 없다면 성공! 반복문을 즉시 빠져나옵니다.
-                if (!data.error) {
-                    aiResponse = data.choices[0].message.content;
-                    success = true;
-                    break;
-                } else {
-                    console.log(`${fallbackModels[i]} 실패 (서버 꽉 참), 다음 모델로 시도합니다.`);
-                }
-            } catch (error) {
-                console.log(`${fallbackModels[i]} 네트워크 에러, 다음 모델로 시도합니다.`);
+            if (data.error) {
+                let errorMsg = data.error.message;
+                // 에러 원인이 '무료 일일 한도 초과' 등 API 키 자체의 문제일 수 있음
+                addMessageToUI("API 오류: " + errorMsg + "<br>(※ 일일 무료 한도를 초과했거나 일시적인 서버 오류일 수 있습니다. 잠시 후 시도해주세요.)", 'ai');
+                messageHistory.pop(); 
+                return;
             }
-        }
 
-        // 로딩 메시지 삭제
-        document.getElementById(loadingId).remove();
-
-        // 6개 모델 중 하나라도 성공했을 경우
-        if (success) {
+            const aiResponse = data.choices[0].message.content;
             addMessageToUI(aiResponse, 'ai');
             messageHistory.push({ role: "assistant", content: aiResponse });
-        } else {
-            // 6개가 전부 꽉 찬 아주 극단적인 경우
-            addMessageToUI("API 오류: 현재 전 세계의 모든 무료 서버가 혼잡합니다. 1~2분 뒤에 다시 시도해주세요.", 'ai');
-            messageHistory.pop(); 
+
+        } catch (error) {
+            document.getElementById(loadingId).remove();
+            addMessageToUI("통신 오류가 발생했습니다. 네트워크 상태를 확인해주세요.", 'ai');
+            messageHistory.pop();
         }
     }
 
