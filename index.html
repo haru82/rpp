@@ -43,7 +43,6 @@
 <body>
 
 <div class="mobile-container">
-    <!-- 🔒 상단 API 키 입력바 (브라우저 로컬 스토리지에만 저장됨) -->
     <div id="api-key-area">
         Gemini Key: <input type="password" id="api-key" placeholder="AIza로 시작하는 키">
         <button onclick="saveKey()">저장</button>
@@ -73,7 +72,6 @@
 </div>
 
 <script>
-    // 페이지 로드 시 저장된 키 불러오기
     window.onload = function() {
         const savedKey = localStorage.getItem('my_gemini_key');
         if (savedKey) {
@@ -121,50 +119,70 @@
 
         const loadingId = addMessageToUI("입력 중...", 'ai', true);
 
-        try {
-            // 구글 Gemini 3.8 Flash API 엔드포인트 규격 적용
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+        // 서버 혼잡 시 자동 재시도 로직 포함
+        let success = false;
+        let aiResponse = "";
 
-            const response = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-                    contents: chatHistory,
-                    safetySettings: [
-                        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-                    ],
-                    generationConfig: {
-                        temperature: 0.85,
-                        maxOutputTokens: 300
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+                        contents: chatHistory,
+                        safetySettings: [
+                            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                        ],
+                        generationConfig: {
+                            temperature: 0.85,
+                            maxOutputTokens: 300
+                        }
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    if (data.error.code === 503 && attempt < 3) {
+                        // 서버 혼잡 에러일 경우 1초 뒤 자동 재시도
+                        await new Promise(r => setTimeout(r, 1000));
+                        continue;
                     }
-                })
-            });
+                    document.getElementById(loadingId).remove();
+                    addMessageToUI("API 오류: " + data.error.message, 'ai');
+                    chatHistory.pop();
+                    return;
+                }
 
-            const data = await response.json();
-            document.getElementById(loadingId).remove();
-
-            if (data.error) {
-                addMessageToUI("API 오류: " + data.error.message, 'ai');
-                chatHistory.pop(); 
-                return;
+                if (data.candidates && data.candidates[0].content) {
+                    aiResponse = data.candidates[0].content.parts[0].text;
+                    success = true;
+                    break;
+                }
+            } catch (err) {
+                if (attempt === 3) {
+                    document.getElementById(loadingId).remove();
+                    addMessageToUI("통신 오류가 발생했습니다.", 'ai');
+                    chatHistory.pop();
+                    return;
+                }
+                await new Promise(r => setTimeout(r, 1000));
             }
+        }
 
-            if (data.candidates && data.candidates[0].content) {
-                const aiResponse = data.candidates[0].content.parts[0].text;
-                addMessageToUI(aiResponse, 'ai');
-                chatHistory.push({ role: "model", parts: [{ text: aiResponse }] });
-            } else {
-                addMessageToUI("응답을 받을 수 없습니다.", 'ai');
-                chatHistory.pop();
-            }
+        document.getElementById(loadingId).remove();
 
-        } catch (error) {
-            document.getElementById(loadingId).remove();
-            addMessageToUI("통신 오류가 발생했습니다.", 'ai');
+        if (success) {
+            addMessageToUI(aiResponse, 'ai');
+            chatHistory.push({ role: "model", parts: [{ text: aiResponse }] });
+        } else {
+            addMessageToUI("서버가 혼잡하여 응답을 받지 못했습니다. 잠시 후 다시 전송해주세요.", 'ai');
             chatHistory.pop();
         }
     }
